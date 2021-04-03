@@ -117,7 +117,7 @@
                 {{ t.name }}
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formattedPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -188,7 +188,7 @@
 </template>
 
 <script>
-import { loadTicker } from "./api";
+import { loadTickers } from "./api";
 import { loadCoinList } from "./api";
 
 export default {
@@ -224,10 +224,8 @@ export default {
     const tickersData = localStorage.getItem("list");
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
-      this.tickers.forEach((ticker) => {
-        this.subscribeToUpdates(ticker.name);
-      });
     }
+    setInterval(this.updateTickers, 3000);
   },
   mounted: function () {
     this.getOptions();
@@ -269,32 +267,38 @@ export default {
   },
 
   methods: {
-    subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const exchangeData = await loadTicker(tickerName);
-        this.tickers.find((t) => t.name === tickerName).price =
-          exchangeData.USD > 1
-            ? exchangeData.USD.toFixed(2)
-            : exchangeData.USD.toPrecision(2);
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(exchangeData.USD);
+    formattedPrice(price) {
+      if (price === "-" || price === "_") {
+        return price;
+      }
+      console.log(price);
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    },
+    async updateTickers() {
+      if (!this.tickers.length) {
+        return;
+      }
+      const exchangeData = await loadTickers(this.tickers.map((t) => t.name));
+      this.tickers.forEach((ticker) => {
+        const price = exchangeData[ticker.name.toUpperCase()];
+        if (!price) {
+          ticker.price = "-";
+          return;
         }
-      }, 3000);
+        ticker.price = price ?? "-";
+      });
     },
     showLoading() {
-      setTimeout(() => (this.isLoading = false), 1000);
+      setTimeout(() => (this.isLoading = false), 500);
     },
     add() {
-      console.log(this.page);
       const currentTicker = {
         name: this.ticker,
-        price: "_"
+        price: "-"
       };
       if (this.checkDuplicate(currentTicker)) {
         this.tickers = [...this.tickers, currentTicker];
         this.filter = "";
-
-        this.subscribeToUpdates(currentTicker.name);
         this.ticker = "";
         this.tickerIsDuplicate = false;
       } else {
@@ -337,7 +341,6 @@ export default {
               elem.name.toLowerCase() == currentTicker.name.toLowerCase()
           ))
         : false;
-      console.log(result);
       return result;
     }
   },
