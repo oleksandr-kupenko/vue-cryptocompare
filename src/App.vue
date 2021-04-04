@@ -188,8 +188,12 @@
 </template>
 
 <script>
-import { loadTickers } from "./api";
-import { loadCoinList } from "./api";
+import {
+  loadTickers,
+  loadCoinList,
+  subscribeToTicker,
+  unsubscribeToTicker
+} from "./api";
 
 export default {
   name: "App",
@@ -224,6 +228,11 @@ export default {
     const tickersData = localStorage.getItem("list");
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach((ticker) => {
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
+      });
     }
     setInterval(this.updateTickers, 3000);
   },
@@ -267,18 +276,24 @@ export default {
   },
 
   methods: {
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          t.price = price;
+        });
+    },
     formattedPrice(price) {
       if (price === "-" || price === "_") {
         return price;
       }
-      console.log(price);
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
     async updateTickers() {
-      if (!this.tickers.length) {
+      /*       if (!this.tickers.length) {
         return;
       }
-      const exchangeData = await loadTickers(this.tickers.map((t) => t.name));
+
       this.tickers.forEach((ticker) => {
         const price = exchangeData[ticker.name.toUpperCase()];
         if (!price) {
@@ -286,7 +301,7 @@ export default {
           return;
         }
         ticker.price = price ?? "-";
-      });
+      }); */
     },
     showLoading() {
       setTimeout(() => (this.isLoading = false), 500);
@@ -298,9 +313,12 @@ export default {
       };
       if (this.checkDuplicate(currentTicker)) {
         this.tickers = [...this.tickers, currentTicker];
-        this.filter = "";
-        this.ticker = "";
         this.tickerIsDuplicate = false;
+        subscribeToTicker(currentTicker.name, (newPrice) => {
+          this.updateTicker(currentTicker.name, newPrice);
+        });
+        this.ticker = "";
+        this.filter = "";
       } else {
         this.tickerIsDuplicate = true;
       }
@@ -313,6 +331,7 @@ export default {
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeToTicker(tickerToRemove.name);
     },
 
     putOption(option) {
